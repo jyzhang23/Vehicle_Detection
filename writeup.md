@@ -23,7 +23,7 @@ The goals / steps of this project are the following:
 [image5]: ./output_images/color_comparison.png
 [image6]: ./output_images/scale1.png
 [image7]: ./output_images/scale1_5.png
-[image8]: ./output_images/scale2.png
+[image8]: ./output_images/scale2_25.png
 [image9]: ./output_images/image_test.png
 [image10]: ./output_images/heatmap_test.png
 [video1]: ./project_video_output.mp4
@@ -72,11 +72,11 @@ spatial_feat = True # Spatial features on or off
 hist_feat = True # Histogram features on or off
 hog_feat = True # HOG features on or off
 ```
-This was the parameter set that achieved the highest accuracy on my training set (99.3%). It contains a lot of features (10,512) but efforts to reduce the number of features always reduced the accuracy and led to more false positives in the final video pipeline, so I settled for these parameters.
+This was the parameter set that achieved the highest accuracy on my training set (98.85%). It contains a lot of features (10,512) but efforts to reduce the number of features always reduced the accuracy and led to more false positives in the final video pipeline, so I settled for these parameters.
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-I trained a linear SVM using HOG, color, and spatial features in code cell 6 of the Jupyter notebook. The whole dataset was randomly split into 80% training and 20% testing sets. An accuracy of 99.3% was achieved, and the model and parameters were saved to a pickle file to be recalled for the video pipeline.
+I trained a linear SVM using HOG, color, and spatial features in code cell 6 of the Jupyter notebook. The whole dataset was randomly split into 80% training and 20% testing sets. An accuracy of 98.85% was achieved, and the model and parameters were saved to a pickle file to be recalled for the video pipeline. I used a C parameter of 0.01 (default is 1) in order to reduce the error penalty to make the model more generalizable.
 
 ### Sliding Window Search
 
@@ -84,21 +84,21 @@ I trained a linear SVM using HOG, color, and spatial features in code cell 6 of 
 
 A sliding window search is implemented in the `find_cars` function in code cell 1 of the Jupyter notebook. A region of interest is selected in the image, and resized if necessary. A square window is moved over this region, and the HOG/spatial/color features are extracted from the window at each position, and classified as a car or not. If a car is detected, the box of the windowed region is returned.
 
-The sliding window search parameters are set in code cell 8. I chose 3 different image scales to sample: `scales = [1, 1.5, 2]`. The starting and ending y positions for them are `ystarts = [384,400,400]` and `ystops = [512,592,656]`. These values were chosen empirically so that the resized region would roughly correspond to the size that cars would appear at those locations. An overlap of 75% between each window was used. Example images of the search region for each of the three scales are shown below.
+The sliding window search parameters are set in code cell 8. I chose 3 different image scales to sample: `scales = [1, 1.5, 2.25]`. The starting and ending y positions for them are `ystarts = [400,440,540]` and `ystops = [500,590,720]`. These values were chosen empirically so that the resized region would roughly correspond to the size that cars would appear at those locations. An overlap of 75% between each window was used. Example images of the search region for each of the three scales are shown below.
 
 ![Scale 1 region][image6]
 ![Scale 1.5 region][image7]
 ![Scale 2 region][image8]
 
-There is a considerable overlap between these regions, and cars near the camera are bigger than the largest search boxes. However, this has not proven to be an issue when testing on the video stream. More scales could have been used (and were tested with!), but would add to the time of the vehicle detection, and the overlap between the different scales could be reduced, although this would have more significant consequence with the thresholding step to be discussed later.
+More scales could have been used (and were tested with!), but would add to the time of the vehicle detection, and the overlap between the different scales could be reduced, although this would have more significant consequence with the thresholding step to be discussed later. After a lot of trial and error, I came to the conclusion that increasing the number of scales and their locations have to be balanced very carefully, since this could lead to certain regions of the image getting oversampled/producing lots of false positives.
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector.  Here are some example results on the test images:
+Ultimately I searched on three scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector.  Here are some example results on the test images:
 
 ![Pipeline on test images][image9]
 
-These results were obtained after using a threshold of 3 (see below). I tried many different combinations of color-spaces, feature parameters, scales, and window regions. The final model that I used had an accuracy on the test data of 99.3%, but still resulted in many false positives, that necessitated the use of the heatmap approach described below.
+These results were obtained after using a threshold of 1 (see below). I tried many different combinations of color-spaces, feature parameters, scales, and window regions. The final model that I used had an accuracy on the test data of 98.85%, with a C parameter of 0.01 to make the model more generalizable.
 
 ---
 
@@ -107,17 +107,19 @@ These results were obtained after using a threshold of 3 (see below). I tried ma
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
 Here's a [link to my video result](./project_video_output.mp4)
 
-For the video implementation, I sum up all the bounding boxes for 10 consecutive frames (current frame and 9 previous frames), and use those for the heatmap. The camera looks to be recording at 25Hz (1261 frames over 50s) so 10 frames corresponds to 0.4s. This has the effect of greatly reducing the wobble in the detection boxes from frame to frame, compared to using just a single frame's features, while not significantly introducing blurring effects. The code is implemented in code cell 8 of the Jupyter notebook. Because of this, the threshold needs to be increased, by at least a factor of 10. In the final implementation in the video output, a threshold of 80 was used. 
+For the video implementation, I sum up all the bounding boxes for 15 consecutive frames (current frame and 14 previous frames), and use those for the heatmap. The camera looks to be recording at 25Hz (1261 frames over 50s) so 15 frames corresponds to 0.6s. This has the effect of greatly reducing the wobble in the detection boxes from frame to frame, compared to using just a single frame's features, while not significantly introducing blurring effects. The code is implemented in code cell 8 of the Jupyter notebook. Because of this, the threshold needs to be increased, by at least a factor of 15. In the final implementation in the video output, a threshold of 45 was used, which corresponds to 3 per frame. 
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video, which is a combination of all the scaling windows at each position.  For a given frame, its positive detections, plus those from the previous 9 frames are combined and added to a heatmap. This heatmap is then thresholded to identify the vehicle positions.  I used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+I recorded the positions of positive detections in each frame of the video, which is a combination of all the scaling windows at each position.  For a given frame, its positive detections, plus those from the previous 14 frames are combined and added to a heatmap. This heatmap is then thresholded to identify the vehicle positions.  I used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
 
-Below is the heatmap of the six sample images, shown above with the bounding boxes from the image pipeline. As can be seen, there are false positives in image 1, 2, 4 and 5 which need to be thresholded to remove. 
+Below is the heatmap of the six sample images, shown above with the bounding boxes from the image pipeline. As can be seen, there are false positives in image 3, 4 and 5 which need to be thresholded to remove. 
 
 ![Heatmap on test images][image10]
 
-The same principle applies when frames are summed. One additional feature I added when summing frames, was to do a double threshold. I used a lower threshold for the regions around the outside of the searchable region, and a higher threshold for the inside region. This is implemented in the `apply_threshold` function in code cell 1. I thought this step was justified since the area around the edge of the searchable region has less overlap between bounding boxes than the area in the center. Therefore, I thresholded the center region with twice the threshold as the edges.
+The same principle applies when frames are summed. 
+
+Some additional thresholding approaches I tried included thresholding more towards the center of the image (since they generally have more window overlaps), and thresholding each pixel according to how many window searches overlapped that pixel. In the end, the simple threshold approach worked the best for me.
 
 ---
 
@@ -125,8 +127,8 @@ The same principle applies when frames are summed. One additional feature I adde
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-I started using the small dataset that contained about 1200 images of cars and non-cars. With this data I could get training data accuracy greater than 99.5%, with less than 1000 features, and 100% with more features. However I got lots of false detections on the video pipeline, which ultimately led me to use the larger dataset with about 9000 images of cars and non-cars. This dataset took much longer to train, and I ultimately needed to use parameters that resulted in over 10,000 features in order to reach 99.3% accuracy, which also significantly increased prediction times. 
+I started using the small dataset that contained about 1200 images of cars and non-cars. With this data I could get training data accuracy greater than 99.5%, with less than 1000 features, and 100% with more features. However I got lots of false detections on the video pipeline, which ultimately led me to use the larger dataset with about 9000 images of cars and non-cars. This dataset took much longer to train, and I ultimately needed to use parameters that resulted in over 10,000 features in order to reach 99.3% accuracy, which also significantly increased prediction times. I eventually turned down the C paramter to 0.01 to try to make the model more generalizable, resulting in a final accuracy of 98.95%.
 
-Even with such a large model, many false positives were detected on the video, which led me to use a high threshold (80 for the outside region). Using a large threshold has the disadvantage of generating smaller bounding boxes around the cars, as well as false negatives. In the end I had to try to balance the two as best as possible.
+There's always an issue with potential overfitting and making the model generalizable. Even with a model that has 99% training set accuracy, if we assume that it's fully generalizable, that still will generate 1 false classification every 1% of the time. In my final implementation, there are 357 window classifications every frame, so you would expect 3.6 false classifications per frame. Of course, I don't expect the model to be fully generalizable either, so the false classifications would increase even more. This is where the heatmap and averaging helps tremendously. However, obtaining a generalizable model with good accuracy is an essential starting point.
 
-It seemed lots of false positives were detected in the video at the median railing, especially when tree shadows were also present, and sometimes even on the road surface. This seems to suggest that improvement could be made in the classifier. I tried all the color-spaces available to me, but another possibility to improve the pipeline could be to combine multiple color-spaces, such as the `L` channel from `LUV` and `Y` channel from `YCrCb`, and similarly, using these channels for the color extraction. Another possibility is to augment the training data further, either with flipped images, or extracted images from the video.
+One possibility to improve the pipeline could be to combine multiple color-spaces, such as the `L` channel from `LUV` and `Y` channel from `YCrCb`, and similarly, using these channels for the color extraction. Another possibility is to augment the training data further, either with flipped images, or extracted images from the video.
